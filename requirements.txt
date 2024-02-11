@@ -1,0 +1,6 @@
+dbus-python
+pyimgur
+pypresence
+pympris
+python-dotenv
+requests
