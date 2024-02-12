@@ -36,6 +36,7 @@ ICON_NAMES = {
     'MellowPlayer': 'mellowplayer',
     'Chrome': 'chrome',
     'Spotify': 'spotify',
+    'Strawberry': 'strawberry',
     'default_icon': 'default_icon',
 }
 
@@ -61,6 +62,7 @@ def get_active_player():
     mp = pympris.MediaPlayer(players_ids[0], bus)
     player_name = mp.root.Identity
     player_bus = SessionBus().get_object(player_id, "/org/mpris/MediaPlayer2")
+    print(player_name)
     return dbus.Interface(player_bus, "org.freedesktop.DBus.Properties"), player_name
 
 def get_current_track_info(player_properties):
