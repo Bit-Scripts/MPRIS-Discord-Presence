@@ -9,12 +9,20 @@ from pyimgur import Imgur
 from pypresence import Presence
 import pympris
 
-# Charge les variables d'environnement depuis un fichier .env
-load_dotenv()
+# Obtient le chemin d'accès au dossier du script actuel
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Construit le chemin d'accès au fichier .env basé sur le dossier du script
+env_path = os.path.join(script_dir, '.env')
+
+# Charge les variables d'environnement depuis le fichier .env spécifié
+load_dotenv(env_path)
 
 IMGUR_CLIENT_ID = os.getenv('IMGUR_CLIENT_ID')
 DISCORD_CLIENT_ID = os.getenv('DISCORD_CLIENT_ID')  # Assurez-vous que ceci est votre propre Client ID Discord
-CACHE_PATH = "./image_cache.json"  # Chemin vers un fichier de cache pour les images téléchargées
+
+# Construit le chemin d'accès au fichier de cache d'image basé sur le dossier du script
+CACHE_PATH = os.path.join(script_dir, 'image_cache.json')  # Chemin vers un fichier de cache pour les images téléchargées
 
 ICON_NAMES = {
     'Clementine': 'clementine',

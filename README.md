@@ -42,7 +42,13 @@ cp .env-example .env
 IMGUR_CLIENT_ID='your_imgur_client_id'
 DISCORD_CLIENT_ID='your_discord_client_id'
 ```
-3. Go to the Discord Developer Portal and upload icons for each media player with the names as mentioned in the ICON_NAMES dictionary. Ensure each icon's name matches the key in the dictionary exactly.
+3. Uploading Icons to Your Discord Bot:
+- Ensure you have a folder named `playersIcons` containing all the player icons you wish to use.
+- Navigate to the Discord Developer Portal, select your application, and go to the "Rich Presence" > "Art Assets" section.
+- Upload each icon from the `playersIcons` folder to your Discord application. The name you give each icon in the Discord Developer Portal should match exactly with the keys in the `ICON_NAMES` dictionary within your script.  
+  
+#### Note
+It is crucial to add all the icons from the `playersIcons` folder one by one into your Discord application, ensuring each icon's name in the Discord Developer Portal corresponds to its intended use within your application, as specified in the `ICON_NAMES` dictionary.  
   
 ## Usage
 Run the application:
