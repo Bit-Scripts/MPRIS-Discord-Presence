@@ -1,8 +1,14 @@
 # MPRIS Discord Presence  
   
+Pour le français, [rendez-vous](./README-french.md)
+
 ## Overview  
-MPRIS Discord Presence is a Python application designed to integrate music playback information from various MPRIS-compatible media players with Discord's Rich Presence feature. It displays current playing track information and player icons on Discord status.  
+MPRIS Discord Presence is a Python application designed to integrate music playback information from various MPRIS-compatible media players with Discord's Rich Presence functionality. It displays information on the track currently playing, as well as player icons on the Discord status. On Linux systems, thanks to MPRIS, which enables the system to display the media currently playing on a wide variety of media players (including web browsers) in the user interface, this script retrieves this data and displays it directly in the Discord profile using Discord Rich Presence (Discord RPC) technology. This requires the Discord client to be installed on the system.
   
+This integration provides an enriched user experience, allowing you to share your currently playing multimedia content with your Discord community, while personalizing your profile with detailed information and player-specific icons. Whether you're listening to music, watching a video or a podcast, MPRIS Discord Presence makes these moments visible and shareable with your circle on Discord, adding a social layer to your multimedia experience.  
+  
+**Illustration :**
+
 ![Illustration](https://media.discordapp.net/attachments/1206047501740675132/1206208623097942107/image.png?ex=65db2c52&is=65c8b752&hm=428f296082a428b3f8c26ac7222af798e38efe3e267a0518af3762b97dba6808&=&format=webp&quality=lossless&width=1040&height=848)
   
 ## Features  
