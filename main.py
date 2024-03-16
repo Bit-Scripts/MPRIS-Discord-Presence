@@ -3,11 +3,14 @@ import dbus
 import os
 import time
 import json
-import requests
 from dotenv import load_dotenv
-from pyimgur import Imgur
 from pypresence import Presence
+import pypresence
 import pympris
+from minio import Minio
+from minio.error import S3Error
+from mimetypes import guess_type
+import magic
 
 # Obtient le chemin d'accès au dossier du script actuel
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,7 +21,10 @@ env_path = os.path.join(script_dir, '.env')
 # Charge les variables d'environnement depuis le fichier .env spécifié
 load_dotenv(env_path)
 
-IMGUR_CLIENT_ID = os.getenv('IMGUR_CLIENT_ID')
+# IMGUR_CLIENT_ID = os.getenv('IMGUR_CLIENT_ID')
+MINIO_URL = os.getenv('MINIO_URL')
+MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY')
+MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY')
 DISCORD_CLIENT_ID = os.getenv('DISCORD_CLIENT_ID')  # Assurez-vous que ceci est votre propre Client ID Discord
 
 # Construit le chemin d'accès au fichier de cache d'image basé sur le dossier du script
@@ -40,7 +46,7 @@ ICON_NAMES = {
     'default_icon': 'default_icon',
 }
 
-RPC = Presence(DISCORD_CLIENT_ID)
+RPC = Presence(DISCORD_CLIENT_ID, response_timeout=15)
 RPC.connect()
 
 def get_icon_by_name(icon_name):
@@ -86,40 +92,55 @@ def update_json(data, f="image_cache", encoding="utf-8"):
     with open(f"{f}.json", "w", encoding=encoding) as file:
         json.dump(data, file, indent=4)
 
-def upload_image_to_imgur(image_path):
-    # Assurez-vous de normaliser le chemin de l'image avant de l'utiliser.
-    image_path_str = image_path.removeprefix('file://')
+def upload_file_to_minio(bucket_name, file_path, object_name=None):
+    if file_path.startswith('file://'):
+        image_path_str = file_path[7:]
+    else:
+        image_path_str = file_path
+
+    # Lecture du cache
     data = get_json("image_cache")
-    
-    if data is None:
-        data = {}
-        update_json(data)
-    
-    # Utilisez la méthode get pour éviter KeyError et vérifiez si l'image est déjà dans le cache.
+
+    # Vérification du cache
     cached_url = data.get(image_path_str)
     if cached_url:
-        # print(f'URL depuis le cache pour {image_path_str}:', cached_url)
+        print(f"URL depuis le cache pour {image_path_str}: {cached_url}")
         return cached_url
 
-    # Si l'image n'est pas dans le cache, procédez à l'upload.
-    if os.path.isfile(image_path_str):
-        try:
-            imgur = Imgur(IMGUR_CLIENT_ID)
-            uploaded_image = imgur.upload_image(path=image_path_str, title="Now Playing")
-            # Mise à jour du cache avec la nouvelle image.
-            data[image_path_str] = uploaded_image.link
-            update_json(data)
-            return uploaded_image.link
-        except requests.exceptions.HTTPError as e:
-            print(f"Erreur lors de l'upload de l'image: {e}")
-            if e.response.status_code == 429:
-                print("Taux limite atteint, veuillez attendre avant de réessayer.")
-        except Exception as e:
-            print(f"Erreur inattendue: {e}")
-    else:
-        print("Le fichier n'existe pas:", image_path_str)
+    # Configuration du client MinIO
+    client = Minio(
+        MINIO_URL,
+        access_key=MINIO_ACCESS_KEY,
+        secret_key=MINIO_SECRET_KEY,
+        secure=True
+    )
+    
+    if object_name is None:
+        object_name = os.path.basename(image_path_str)
 
-    return None
+    mime_type = magic.from_file(image_path_str, mime=True)
+
+    try:
+        # Utilisez python-magic pour deviner le type MIME basé sur le contenu du fichier
+        client.fput_object(
+            bucket_name, object_name, image_path_str,
+            content_type=mime_type,  # Utilisez le type MIME déterminé par python-magic
+        )
+        print(f"Fichier {image_path_str} uploadé comme {object_name} avec le type MIME {mime_type}.")
+
+        # Construire l'URL de l'objet
+        scheme = "https://"
+        object_url = f"{scheme}{MINIO_URL}/{bucket_name}/{object_name}"
+
+        # Mise à jour du cache uniquement si l'upload réussit
+        data[image_path_str] = object_url
+        update_json(data, "image_cache")
+
+        return object_url
+    except S3Error as exc:
+        print("Erreur lors de l'upload:", exc)
+        return None
+
 
 def format_time(microseconds):
     # Convertit les microsecondes en minutes et secondes
@@ -136,18 +157,20 @@ def update_discord_presence(title, artist, position, duration, image_link, playe
     # Utilisez une icône par défaut si le lecteur n'est pas dans la liste
     icon_name = get_icon_by_name(player_name) or get_icon_by_name("default_icon")
     large_image = image_link or icon_name
-
-    # Met à jour la présence Discord avec une barre de progression
-    RPC.update(
-        details=title,
-        state=f"par {artist}",
-        start=start_timestamp,
-        end=end_timestamp,
-        large_image=large_image,
-        small_image=icon_name,
-        large_text="Écoute en cours",
-        small_text=player_name
-    )
+    try:
+        # Met à jour la présence Discord avec une barre de progression
+        RPC.update(
+            details=title,
+            state=f"par {artist}",
+            start=start_timestamp,
+            end=end_timestamp,
+            large_image=large_image,
+            small_image=icon_name,
+            large_text="Écoute en cours",
+            small_text=player_name
+        )
+    except pypresence.exceptions.ResponseTimeout:
+        print("Timeout en attente de réponse de Discord. Tentative de reconnexion...")
 
 def get_player_properties():
     session_bus = SessionBus()
@@ -193,7 +216,8 @@ def clear_discord_presence():
 def handle_image_caching_and_upload(art_url):
     # Logique de cache et d'upload d'image comme montré précédemment
     # Retourne le lien de l'image uploadée ou le lien du cache
-    return upload_image_to_imgur(art_url)
+    # return upload_image_to_imgur(art_url)
+    return upload_file_to_minio('coversimage', art_url)
 
 if __name__ == "__main__":
     main()

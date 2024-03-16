@@ -4,3 +4,5 @@ pypresence
 pympris
 python-dotenv
 requests
+minio
+python-magic

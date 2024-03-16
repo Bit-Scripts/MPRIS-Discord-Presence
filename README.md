@@ -12,15 +12,15 @@ MPRIS Discord Presence is a Python application designed to integrate music playb
   
 ## Requirements
 - Python 3.6 or later.  
-- dbus, pyimgur, pypresence, pympris Python packages.  
-- An Imgur client ID for image hosting.  
-- A Discord application with Rich Presence assets.  
+- dbus, minio, pypresence, python-magic, pympris Python packages.  
+- An [AWS S3 account](https://aws.amazon.com/fr/s3/).  
+- A [Discord application](https://discord.com/developers/applications) with Rich Presence assets.  
 
 ## Installation
 Clone the repository to your local machine:
   
 ```bash
-git clone https://your-repository-url/mpris-discord-presence.git  
+git clone https://github.com/Bit-Scripts/MPRIS-Discord-Presence  
 cd mpris-discord-presence  
 ```
   
@@ -37,12 +37,17 @@ pip install -r requirements.txt
 cp .env-example .env
 ```
   
-2. Obtain and configure your IMGUR_CLIENT_ID and DISCORD_CLIENT_ID in the .env file. You can get these IDs from the Imgur API and Discord Developer Portal respectively.
+2. Configure your [AWS S3 account](https://docs.aws.amazon.com/fr_fr/AmazonS3/latest/userguide/GetStartedWithS3.html) or MinIO server and DISCORD_CLIENT_ID in the .env file. For AWS S3, this information will be supplied by AWS. For MinIO, you will have configured this information when you set up your server.
 ```plaintext
-IMGUR_CLIENT_ID='your_imgur_client_id'
 DISCORD_CLIENT_ID='your_discord_client_id'
+MINIO_URL='s3.amazonaws.com'  # Use this value for AWS S3. For local MinIO, use the URL of your MinIO instance.
+MINIO_ACCESS_KEY='your_access_key_for_aws_s3_or_minio'
+MINIO_SECRET_KEY='your_secret_key_for_aws_s3_or_minio'
 ```
-3. Uploading Icons to Your Discord Bot:
+  
+3. For your MPRIS Discord Presence application, music player icons are downloaded and configured in the Art Assets of your Discord application via the Discord Developer Portal.These icons are used to customize the appearance of your Discord Rich Presence, displaying the player in use. In contrast, the MinIO or AWS S3 bucket is used to store the album art and video thumbnails that are displayed in your Discord Rich Presence. It's crucial to create this bucket to store these images and configure it to allow public access. This ensures that Discord can access the images and display them correctly in the rich presence. The bucket should only contain images intended for public sharing, as access to them is open to all. Be sure to follow the bucket creation steps provided by your storage service (MinIO or AWS S3) and adjust the privacy settings to allow public access to images.  
+    
+4. Uploading Icons to Your Discord Bot:
 - Ensure you have a folder named `playersIcons` containing all the player icons you wish to use.
 - Navigate to the Discord Developer Portal, select your application, and go to the "Rich Presence" > "Art Assets" section.
 - Upload each icon from the `playersIcons` folder to your Discord application. The name you give each icon in the Discord Developer Portal should match exactly with the keys in the `ICON_NAMES` dictionary within your script.  
