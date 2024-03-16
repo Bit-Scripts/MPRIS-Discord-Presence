@@ -21,7 +21,7 @@ env_path = os.path.join(script_dir, '.env')
 # Charge les variables d'environnement depuis le fichier .env spécifié
 load_dotenv(env_path)
 
-# IMGUR_CLIENT_ID = os.getenv('IMGUR_CLIENT_ID')
+# Discord RPC and AWS S3/MinIO configuration :
 MINIO_URL = os.getenv('MINIO_URL')
 MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY')
 MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY')
@@ -216,7 +216,6 @@ def clear_discord_presence():
 def handle_image_caching_and_upload(art_url):
     # Logique de cache et d'upload d'image comme montré précédemment
     # Retourne le lien de l'image uploadée ou le lien du cache
-    # return upload_image_to_imgur(art_url)
     return upload_file_to_minio('coversimage', art_url)
 
 if __name__ == "__main__":
