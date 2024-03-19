@@ -11,6 +11,12 @@ from minio import Minio
 from minio.error import S3Error
 from mimetypes import guess_type
 import magic
+import requests
+from urllib.parse import urlparse
+from io import BytesIO
+from PIL import Image
+import io
+import hashlib
 
 # Obtient le chemin d'accès au dossier du script actuel
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -42,6 +48,7 @@ ICON_NAMES = {
     'MellowPlayer': 'mellowplayer',
     'Chrome': 'chrome',
     'Spotify': 'spotify',
+    'Spotube': 'spotube',
     'Strawberry': 'strawberry',
     'default_icon': 'default_icon',
 }
@@ -81,32 +88,39 @@ def get_current_track_info(player_properties):
 # Récupération
 def get_json(f="image_cache", encoding="utf-8"):
     try:
-        with open(f"./{f}.json", "r", encoding=encoding) as file:
-            data = json.load(file)
-        return data
+        with open(f"{f}.json", "r", encoding=encoding) as file:
+            return json.load(file)
     except FileNotFoundError:
-        update_json({})
+        return {}
 
 # Mise à Jour
 def update_json(data, f="image_cache", encoding="utf-8"):
     with open(f"{f}.json", "w", encoding=encoding) as file:
         json.dump(data, file, indent=4)
 
-def upload_file_to_minio(bucket_name, file_path, object_name=None):
-    if file_path.startswith('file://'):
-        image_path_str = file_path[7:]
-    else:
-        image_path_str = file_path
+def is_url(path):
+    try:
+        result = urlparse(path)
+        return all([result.scheme, result.netloc])
+    except ValueError:
+        return False
 
-    # Lecture du cache
+def generate_image_hash(url):
+    """Génère un hash MD5 de l'URL pour servir d'identifiant unique."""
+    return hashlib.md5(url.encode('utf-8')).hexdigest()
+
+def get_cached_url(image_hash):
+    """Récupère l'URL depuis le cache basé sur le hash de l'image."""
     data = get_json("image_cache")
+    return data.get(image_hash)
 
-    # Vérification du cache
-    cached_url = data.get(image_path_str)
-    if cached_url:
-        print(f"URL depuis le cache pour {image_path_str}: {cached_url}")
-        return cached_url
+def update_cache(image_hash, object_url):
+    """Mise à jour du cache avec la nouvelle URL de l'image."""
+    data = get_json("image_cache")
+    data[image_hash] = object_url
+    update_json(data, "image_cache")
 
+def upload_file_to_minio(bucket_name, file_path, object_name=None):
     # Configuration du client MinIO
     client = Minio(
         MINIO_URL,
@@ -115,31 +129,99 @@ def upload_file_to_minio(bucket_name, file_path, object_name=None):
         secure=True
     )
     
-    if object_name is None:
-        object_name = os.path.basename(image_path_str)
+    if file_path.startswith('file://'):
+        image_path_str = file_path[7:]
+    else:
+        image_path_str = file_path
 
-    mime_type = magic.from_file(image_path_str, mime=True)
+    image_hash = generate_image_hash(image_path_str)
+    cached_url = get_cached_url(image_hash)
 
-    try:
-        # Utilisez python-magic pour deviner le type MIME basé sur le contenu du fichier
-        client.fput_object(
-            bucket_name, object_name, image_path_str,
-            content_type=mime_type,  # Utilisez le type MIME déterminé par python-magic
-        )
-        print(f"Fichier {image_path_str} uploadé comme {object_name} avec le type MIME {mime_type}.")
+    if cached_url:
+        print(f"URL depuis le cache pour {image_path_str}: {cached_url}")
+        return cached_url
 
-        # Construire l'URL de l'objet
-        scheme = "https://"
-        object_url = f"{scheme}{MINIO_URL}/{bucket_name}/{object_name}"
+    if is_url(image_path_str):
+        # Téléchargement de l'image depuis l'URL
+        response = requests.get(image_path_str)
+        if response.status_code != 200:
+            print(f"Erreur lors du téléchargement de l'image: {response.status_code}")
+            return None
+        
+        # Conversion de l'image en PNG
+        image = Image.open(io.BytesIO(response.content))
+        image_converted = image.convert("RGBA")
+        png_image_io = io.BytesIO()
+        image_converted.save(png_image_io, format='PNG')
+        png_image_io.seek(0)
+        
+        # Détermination du type MIME
+        mime_type = "image/png"
+        extension = ".png"
 
-        # Mise à jour du cache uniquement si l'upload réussit
-        data[image_path_str] = object_url
-        update_json(data, "image_cache")
+        # Définition du nom de l'objet avec l'extension PNG
+        object_name_with_extension = (object_name or image_path_str.split('/')[-1].split('.')[0]) + extension
+        
+        # Détermination de la taille du fichier PNG
+        file_data = png_image_io
+        file_size = png_image_io.getbuffer().nbytes
 
-        return object_url
-    except S3Error as exc:
-        print("Erreur lors de l'upload:", exc)
-        return None
+        try:
+            # Upload de l'image convertie en PNG dans le bucket MinIO
+            client.put_object(
+                bucket_name,
+                object_name_with_extension,
+                file_data,
+                file_size,
+                content_type=mime_type,
+            )
+            print(f"Fichier {object_name_with_extension} uploadé avec succès.")
+            
+            # Construction de l'URL de l'image uploadée
+            scheme = "https://"
+            object_url = f"{scheme}{MINIO_URL}/{bucket_name}/{object_name_with_extension}"
+            update_cache(image_hash, object_url)
+            
+            return object_url
+        except S3Error as exc:
+            print("Erreur lors de l'upload:", exc)
+            return None
+
+    else:
+        # Lecture du cache
+        data = get_json("image_cache")
+
+        # Vérification du cache
+        cached_url = data.get(image_path_str)
+        if cached_url:
+            print(f"URL depuis le cache pour {image_path_str}: {cached_url}")
+            return cached_url
+
+        if object_name is None:
+            object_name = os.path.basename(image_path_str)
+
+        mime_type = magic.from_file(image_path_str, mime=True)
+
+        try:
+            # Utilisez python-magic pour deviner le type MIME basé sur le contenu du fichier
+            client.fput_object(
+                bucket_name, object_name, image_path_str,
+                content_type=mime_type,  # Utilisez le type MIME déterminé par python-magic
+            )
+            print(f"Fichier {image_path_str} uploadé comme {object_name} avec le type MIME {mime_type}.")
+
+            # Construire l'URL de l'objet
+            scheme = "https://"
+            object_url = f"{scheme}{MINIO_URL}/{bucket_name}/{object_name}"
+
+            # Mise à jour du cache uniquement si l'upload réussit
+            data[image_path_str] = object_url
+            update_json(data, "image_cache")
+
+            return object_url
+        except S3Error as exc:
+            print("Erreur lors de l'upload:", exc)
+            return None
 
 
 def format_time(microseconds):
